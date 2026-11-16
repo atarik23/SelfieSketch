@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Rectangle, Circle
 from robotics.kinematics import DrawingArm
+from planning.shapes import interpolate_line
 
 # ---------------- settings (match your robot) ----------------
 L1 = 10.0                  # cm, stick 1 length
@@ -17,7 +18,7 @@ PEN_CONTACT_ANGLE = 45     # pen touches paper when servo 3 <= this
 
 PAPER = (-2.0, 7.0, 12.5, 9.5)    # x, y, width, height in cm
 HOME = (90, 90, PEN_UP_ANGLE)
-SPEED = 1.0                # animation speed (1 = real SG90 speed)
+SPEED = 3.0                # animation speed (1 = real SG90 speed)
 
 
 class ArmSimulator:
@@ -59,33 +60,41 @@ class ArmSimulator:
 
         self.pen_up()
         self.send(s1, s2, PEN_UP_ANGLE)
-
-    
     
     def line_to(self, x, y, step=0.1):
         """Draw a straight line using Cartesian interpolation."""
         _, start = self._pen_xy(self.s[0], self.s[1])
 
-        distance = np.hypot(x - start[0], y - start[1])
-        steps = max(1, int(np.ceil(distance / step)))
+        points = interpolate_line(start, (x, y), step)
 
-        targets = []
-
-        for i in range(1, steps + 1):
-            t = i / steps
-
-            px = start[0] + t * (x - start[0])
-            py = start[1] + t * (y - start[1])
-
-            s1, s2 = self.robot.inverse(px, py)
-            targets.append((s1, s2))
+        # Validate the entire path before drawing
+        targets = [
+            self.robot.inverse(px, py)
+            for px, py in points[1:]
+        ]
 
         self.pen_down()
 
         for s1, s2 in targets:
             self.send(s1, s2, PEN_DOWN_ANGLE)
             plt.pause(0.02)
+   
+    def draw_path(self, points, step=0.1):
+        """Draw a continuous path through a sequence of XY points."""
+        if len(points) < 2:
+            raise ValueError("A path must contain at least two points.")
 
+        self.move_to(*points[0])
+
+        for x, y in points[1:]:
+            self.line_to(x, y, step)
+
+        self.pen_up()
+
+    def draw_paths(self, paths, step=0.1):
+        """Draw multiple independent paths."""
+        for path in paths:
+            self.draw_path(path, step)
 
     def clear(self):
         self.ink_x, self.ink_y = [], []
@@ -219,32 +228,29 @@ class ArmSimulator:
 # YOUR PROGRAM - runs when you press "Run program"
 # Same calls you will later send to the Arduino.
 # =====================================================================
-"""def my_program(arm):
-    arm.send(120, 80, PEN_UP_ANGLE)     # move above the paper
-    arm.pen_down()
-    arm.send(120, 100, PEN_DOWN_ANGLE)  # draw
-    arm.write(1, 140)                   # move only servo 1
-    arm.write(2, 80)                    # move only servo 2
-    arm.send(120, 80, PEN_DOWN_ANGLE)
-    arm.delay(300)                      # wait 300 ms
-    arm.pen_up()
-    arm.home()"""
 
 
 def my_program(arm):
     arm.clear()
 
-    # Move to the starting point
-    arm.move_to(3, 10)
+    face = [
+        # Left eye
+        [(3, 13), (4, 13)],
 
-    # Draw a 4 x 4 cm square
-    arm.line_to(7, 10)
-    arm.line_to(7, 14)
-    arm.line_to(3, 14)
-    arm.line_to(3, 10)
+        # Right eye
+        [(6, 13), (7, 13)],
 
-    arm.pen_up()
+        # Nose
+        [(5, 12.5), (4.8, 11.8), (5.2, 11.8)],
+
+        # Mouth
+        [(4, 11), (4.5, 10.7), (5, 10.6),
+         (5.5, 10.7), (6, 11)],
+    ]
+
+    arm.draw_paths(face)
     arm.home()
+
 
 
 if __name__ == "__main__":
