@@ -1,1 +1,0 @@
-"""SelfieSketch software package."""

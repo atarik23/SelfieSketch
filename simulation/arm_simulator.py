@@ -4,7 +4,7 @@ matplotlib.use("qtagg")
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Rectangle, Circle
-from selfiesketch.robotics.kinematics import DrawingArm
+from robotics.kinematics import DrawingArm
 
 # ---------------- settings (match your robot) ----------------
 L1 = 10.0                  # cm, stick 1 length

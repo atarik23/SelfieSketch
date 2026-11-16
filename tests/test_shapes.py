@@ -1,5 +1,4 @@
-from selfiesketch.planning.shapes import circle, square
-
+from planning.shapes import circle, square
 
 def test_square_closed():
     points = square(10, 20, 30)

@@ -1,11 +1,7 @@
-
 import numpy as np
 import pytest
 
-from selfiesketch.robotics.kinematics import (
-    DrawingArm,
-    UnreachableTarget,
-)
+from robotics.kinematics import DrawingArm, UnreachableTarget
 
 
 @pytest.fixture
