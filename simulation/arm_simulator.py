@@ -1,8 +1,10 @@
-
 import numpy as np
+import matplotlib
+matplotlib.use("qtagg")
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Rectangle, Circle
+from selfiesketch.robotics.kinematics import DrawingArm
 
 # ---------------- settings (match your robot) ----------------
 L1 = 10.0                  # cm, stick 1 length
@@ -15,11 +17,12 @@ PEN_CONTACT_ANGLE = 45     # pen touches paper when servo 3 <= this
 
 PAPER = (-2.0, 7.0, 12.5, 9.5)    # x, y, width, height in cm
 HOME = (90, 90, PEN_UP_ANGLE)
-SPEED = 3.0                # animation speed (1 = real SG90 speed)
+SPEED = 1.0                # animation speed (1 = real SG90 speed)
 
 
 class ArmSimulator:
     def __init__(self):
+        self.robot = DrawingArm(link1=L1, link2=L2, elbow_direction=S2_DIR)
         self.s = np.array(HOME, dtype=float)   # servo 1, 2, 3 angles
         self.ink_x, self.ink_y = [], []
         self._syncing = False
@@ -50,17 +53,59 @@ class ArmSimulator:
     def home(self):
         self.send(*HOME)
 
+    def move_to(self, x, y):
+        """Move the pen to an XY position (cm), with pen lifted."""
+        s1, s2 = self.robot.inverse(x, y)
+
+        self.pen_up()
+        self.send(s1, s2, PEN_UP_ANGLE)
+
+    
+    
+    def line_to(self, x, y, step=0.1):
+        """Draw a straight line using Cartesian interpolation."""
+        _, start = self._pen_xy(self.s[0], self.s[1])
+
+        distance = np.hypot(x - start[0], y - start[1])
+        steps = max(1, int(np.ceil(distance / step)))
+
+        targets = []
+
+        for i in range(1, steps + 1):
+            t = i / steps
+
+            px = start[0] + t * (x - start[0])
+            py = start[1] + t * (y - start[1])
+
+            s1, s2 = self.robot.inverse(px, py)
+            targets.append((s1, s2))
+
+        self.pen_down()
+
+        for s1, s2 in targets:
+            self.send(s1, s2, PEN_DOWN_ANGLE)
+            plt.pause(0.02)
+
+
     def clear(self):
         self.ink_x, self.ink_y = [], []
         self._redraw()
 
     # ================= simulation =================
+    
     def _pen_xy(self, s1, s2):
+        """Return elbow and pen positions for visualization."""
         t1 = np.radians(s1)
-        t2 = np.radians(S2_DIR * s2)
-        elbow = np.array([L1 * np.cos(t1), L1 * np.sin(t1)])
-        pen = elbow + np.array([L2 * np.cos(t1 + t2), L2 * np.sin(t1 + t2)])
+
+        elbow = np.array([
+            self.robot.link1 * np.cos(t1),
+            self.robot.link1 * np.sin(t1)
+        ])
+
+        pen = np.array(self.robot.forward(s1, s2))
+
         return elbow, pen
+
 
     def _ink(self):
         if self.s[2] <= PEN_CONTACT_ANGLE:
@@ -72,7 +117,7 @@ class ArmSimulator:
             self.ink_y.append(np.nan)
 
     def _move_to(self, s1, s2, s3, animate):
-        target = np.clip(np.round([s1, s2, s3]), 0, 180)
+        target = np.clip([s1, s2, s3], 0, 180)
         start = self.s.copy()
         steps = max(1, int(np.abs(target - start).max()))   # 1 degree per step
         dt = (0.1 / 60) / SPEED                              # SG90 ~0.1 s / 60 deg
@@ -174,7 +219,7 @@ class ArmSimulator:
 # YOUR PROGRAM - runs when you press "Run program"
 # Same calls you will later send to the Arduino.
 # =====================================================================
-def my_program(arm):
+"""def my_program(arm):
     arm.send(120, 80, PEN_UP_ANGLE)     # move above the paper
     arm.pen_down()
     arm.send(120, 100, PEN_DOWN_ANGLE)  # draw
@@ -182,6 +227,22 @@ def my_program(arm):
     arm.write(2, 80)                    # move only servo 2
     arm.send(120, 80, PEN_DOWN_ANGLE)
     arm.delay(300)                      # wait 300 ms
+    arm.pen_up()
+    arm.home()"""
+
+
+def my_program(arm):
+    arm.clear()
+
+    # Move to the starting point
+    arm.move_to(3, 10)
+
+    # Draw a 4 x 4 cm square
+    arm.line_to(7, 10)
+    arm.line_to(7, 14)
+    arm.line_to(3, 14)
+    arm.line_to(3, 10)
+
     arm.pen_up()
     arm.home()
 

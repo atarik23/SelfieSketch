@@ -1,27 +1,57 @@
-from math import isclose, pi
+
+import numpy as np
 import pytest
-from selfiesketch.robotics.kinematics import PlanarArm, UnreachableTarget
+
+from selfiesketch.robotics.kinematics import (
+    DrawingArm,
+    UnreachableTarget,
+)
 
 
-@pytest.mark.parametrize("point", [(100, 30), (65, 45), (100, 80), (130, 20)])
-def test_ik_fk_roundtrip(point):
-    arm = PlanarArm()
-    angles = arm.inverse_kinematics(*point)
-    actual = arm.forward_kinematics(*angles)
-    assert all(isclose(a, b, abs_tol=1e-8) for a, b in zip(actual, point))
+@pytest.fixture
+def arm():
+    return DrawingArm(link1=10, link2=10)
 
 
-def test_outside_workspace():
-    arm = PlanarArm()
+@pytest.mark.parametrize(
+    "s1, s2, expected_x, expected_y",
+    [
+        (90, 90, 10, 10),
+        (90, 0, 0, 20),
+        (180, 90, -10, 10),
+    ],
+)
+def test_forward_kinematics(arm, s1, s2, expected_x, expected_y):
+    x, y = arm.forward(s1, s2)
+
+    assert np.allclose([x, y], [expected_x, expected_y])
+
+
+@pytest.mark.parametrize(
+    "s1, s2",
+    [
+        (90, 90),
+        (90, 0),
+        (180, 90),
+        (120, 80),
+    ],
+)
+def test_inverse_kinematics(arm, s1, s2):
+    x, y = arm.forward(s1, s2)
+    recovered_s1, recovered_s2 = arm.inverse(x, y)
+
+    assert np.allclose(
+        [recovered_s1, recovered_s2],
+        [s1, s2],
+        atol=1e-6,
+    )
+
+
+def test_unreachable_target(arm):
     with pytest.raises(UnreachableTarget):
-        arm.inverse_kinematics(200, 0)
+        arm.inverse(30, 30)
 
 
-def test_joint_limits():
-    arm = PlanarArm(shoulder_limits=(0, pi/4))
-    assert not arm.is_reachable(100, 30)
-
-
-def test_invalid_link():
-    with pytest.raises(ValueError):
-        PlanarArm(link1=0)
+def test_servo_limits(arm):
+    with pytest.raises(UnreachableTarget):
+        arm.inverse(0, -10)

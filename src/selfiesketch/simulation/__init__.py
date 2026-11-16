@@ -1,1 +1,0 @@
-"""Hardware-free arm visualization."""
