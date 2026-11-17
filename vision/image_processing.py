@@ -1,6 +1,16 @@
 import cv2
+import numpy as np
+from skimage.morphology import skeletonize
 
 
+def thin_lines(image):
+    """Reduce black strokes to a one-pixel-wide skeleton."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    foreground = gray < 127
+
+    skeleton = skeletonize(foreground)
+
+    return np.where(skeleton, 0, 255).astype(np.uint8)
 
 def extract_edges(image_path):
     """Extract simplified edges from an image."""
@@ -24,6 +34,111 @@ def extract_edges(image_path):
     edges = cv2.Canny(blurred, 40, 120)
 
     return edges
+
+
+
+def image_to_paths(image, min_length=20, epsilon=1.5):
+    """Convert black lines on a white image into simplified paths."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    _, binary = cv2.threshold(
+        gray, 127, 255, cv2.THRESH_BINARY_INV
+    )
+
+    contours, _ = cv2.findContours(
+        binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE
+    )
+
+    paths = []
+
+    for contour in contours:
+        if cv2.arcLength(contour, closed=False) < min_length:
+            continue
+
+        simplified = cv2.approxPolyDP(
+            contour, epsilon, closed=False
+        )
+
+        points = [
+            tuple(point[0])
+            for point in simplified
+        ]
+
+        if len(points) >= 2:
+            paths.append(points)
+
+    return paths
+
+
+
+def skeleton_to_paths(skeleton, min_points=10):
+    """Convert a one-pixel skeleton into drawing paths."""
+    pixels = set(zip(*np.where(skeleton == 0)))
+
+    neighbors = {}
+
+    for y, x in pixels:
+        neighbors[(y, x)] = [
+            (y + dy, x + dx)
+            for dy in (-1, 0, 1)
+            for dx in (-1, 0, 1)
+            if (dy != 0 or dx != 0)
+            and (y + dy, x + dx) in pixels
+        ]
+
+    def edge(a, b):
+        return frozenset((a, b))
+
+    visited = set()
+    paths = []
+
+    def trace(start, next_pixel):
+        path = [start, next_pixel]
+        visited.add(edge(start, next_pixel))
+
+        previous, current = start, next_pixel
+
+        while len(neighbors[current]) == 2:
+            candidates = [
+                p for p in neighbors[current]
+                if p != previous
+                and edge(current, p) not in visited
+            ]
+
+            if not candidates:
+                break
+
+            following = candidates[0]
+            visited.add(edge(current, following))
+            path.append(following)
+            previous, current = current, following
+
+        return path
+
+    # Trace paths between endpoints and junctions
+    for pixel in sorted(pixels):
+        if len(neighbors[pixel]) != 2:
+            for neighbor in neighbors[pixel]:
+                if edge(pixel, neighbor) not in visited:
+                    path = trace(pixel, neighbor)
+
+                    if len(path) >= min_points:
+                        paths.append([
+                            (x, y) for y, x in path
+                        ])
+
+    # Trace remaining closed loops
+    for pixel in sorted(pixels):
+        for neighbor in neighbors[pixel]:
+            if edge(pixel, neighbor) not in visited:
+                path = trace(pixel, neighbor)
+
+                if len(path) >= min_points:
+                    paths.append([
+                        (x, y) for y, x in path
+                    ])
+
+    return paths
 
 
 if __name__ == "__main__":
