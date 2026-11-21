@@ -11,3 +11,4 @@ dist/
 *.log
 data/private/
 test_photo.jpeg
+drawing_paths.json

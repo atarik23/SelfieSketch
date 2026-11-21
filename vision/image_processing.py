@@ -141,6 +141,79 @@ def skeleton_to_paths(skeleton, min_points=10):
     return paths
 
 
+
+def merge_paths(paths, max_distance=3.0):
+    """Merge paths whose endpoints are close together."""
+    merged = [list(path) for path in paths if len(path) >= 2]
+
+    while True:
+        best = None
+        best_distance = max_distance
+
+        for i in range(len(merged)):
+            for j in range(i + 1, len(merged)):
+                a = merged[i]
+                b = merged[j]
+
+                # Check all four endpoint combinations
+                combinations = [
+                    (a[-1], b[0], False, False),
+                    (a[-1], b[-1], False, True),
+                    (a[0], b[0], True, False),
+                    (a[0], b[-1], True, True),
+                ]
+
+                for p1, p2, reverse_a, reverse_b in combinations:
+                    distance = np.hypot(
+                        p1[0] - p2[0],
+                        p1[1] - p2[1]
+                    )
+
+                    if distance <= best_distance:
+                        best_distance = distance
+                        best = (i, j, reverse_a, reverse_b)
+
+        if best is None:
+            break
+
+        i, j, reverse_a, reverse_b = best
+
+        a = merged[i][::-1] if reverse_a else merged[i]
+        b = merged[j][::-1] if reverse_b else merged[j]
+
+        # Avoid duplicating identical endpoints
+        if a[-1] == b[0]:
+            combined = a + b[1:]
+        else:
+            combined = a + b
+
+        merged[i] = combined
+        merged.pop(j)
+
+    return merged
+
+
+def simplify_paths(paths, epsilon=1.5):
+    """Reduce path points while preserving their overall shape."""
+    simplified_paths = []
+
+    for path in paths:
+        points = np.array(path, dtype=np.float32).reshape(-1, 1, 2)
+
+        simplified = cv2.approxPolyDP(
+            points,
+            epsilon,
+            closed=False
+        )
+
+        if len(simplified) >= 2:
+            simplified_paths.append(
+                [tuple(point) for point in simplified.reshape(-1, 2)]
+            )
+
+    return simplified_paths
+
+
 if __name__ == "__main__":
     edges = extract_edges("test_photo.jpeg")
 

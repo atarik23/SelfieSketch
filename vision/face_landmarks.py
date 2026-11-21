@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import json
 
 from mediapipe.tasks.python.vision import FaceLandmarksConnections
 from vision.image_processing import (
@@ -8,7 +9,13 @@ from vision.image_processing import (
     image_to_paths,
     thin_lines,
     skeleton_to_paths,
+    merge_paths,
+    simplify_paths,
 )
+from planning.shapes import fit_paths_to_paper
+
+from robotics.kinematics import DrawingArm
+
 
 MODEL_PATH = "vision/models/face_landmarker.task"
 IMAGE_PATH = "test_photo.jpeg"
@@ -135,6 +142,41 @@ if __name__ == "__main__":
         print(f"Skeleton paths: {len(skeleton_paths)}")
         print(f"Skeleton path points: {sum(len(p) for p in skeleton_paths)}")
 
+        merged_paths = merge_paths(skeleton_paths, max_distance=3.0)
+
+        print(f"Merged paths: {len(merged_paths)}")
+        print(f"Merged points: {sum(len(p) for p in merged_paths)}")
+
+        simplified_paths = simplify_paths(merged_paths, epsilon=1.5)
+
+        paper = (-2.0, 7.0, 12.5, 9.5)
+
+        drawing_paths = fit_paths_to_paper(simplified_paths, paper)
+
+        print(f"Drawing paths: {len(drawing_paths)}")
+
+        robot = DrawingArm(link1=10, link2=10)
+
+        unreachable = 0
+
+        for path in drawing_paths:
+            for x, y in path:
+                try:
+                    robot.inverse(x, y)
+                except ValueError:
+                    unreachable += 1
+
+        print(f"Unreachable points: {unreachable}")
+
+        if unreachable == 0:
+            with open("drawing_paths.json", "w") as file:
+                json.dump([[[float(x), float(y)] for x, y in path] for path in drawing_paths], file)
+
+            print("Drawing paths saved successfully!")
+
+        print(f"Simplified paths: {len(simplified_paths)}")
+        print(f"Simplified points: {sum(len(p) for p in simplified_paths)}")
+
         scale = min(800 / width, 600 / height, 1.0)
 
         cv2.imshow(
@@ -142,6 +184,30 @@ if __name__ == "__main__":
             cv2.resize(skeleton, None, fx=scale, fy=scale)
         )
 
+        # Visualize paths extracted from the skeleton
+        skeleton_preview = np.full_like(canvas, 255)
+
+        for path in simplified_paths:
+            points = np.array(path, dtype=np.int32)
+
+            cv2.polylines(
+                skeleton_preview,
+                [points],
+                isClosed=False,
+                color=(0, 0, 0),
+                thickness=1
+            )
+
+        cv2.imshow(
+            "Simplified Paths",
+            cv2.resize(
+                skeleton_preview,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_AREA
+            )
+        )
 
         # Convert the final drawing into vector paths
         paths = image_to_paths(canvas)
@@ -165,8 +231,8 @@ if __name__ == "__main__":
         preview = cv2.resize(
             path_preview,
             None,
-            fx=scale if False else min(800 / width, 600 / height, 1.0),
-            fy=min(800 / width, 600 / height, 1.0),
+            fx=scale,
+            fy=scale,
             interpolation=cv2.INTER_AREA
         )
 

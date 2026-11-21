@@ -6,6 +6,7 @@ from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Rectangle, Circle
 from robotics.kinematics import DrawingArm
 from planning.shapes import interpolate_line
+import json
 
 # ---------------- settings (match your robot) ----------------
 L1 = 10.0                  # cm, stick 1 length
@@ -233,24 +234,17 @@ class ArmSimulator:
 def my_program(arm):
     arm.clear()
 
-    face = [
-        # Left eye
-        [(3, 13), (4, 13)],
+    with open("drawing_paths.json", "r") as file:
+        paths = json.load(file)
 
-        # Right eye
-        [(6, 13), (7, 13)],
+    print(f"Drawing portrait using {len(paths)} paths...")
 
-        # Nose
-        [(5, 12.5), (4.8, 11.8), (5.2, 11.8)],
+    arm.draw_paths(paths)
 
-        # Mouth
-        [(4, 11), (4.5, 10.7), (5, 10.6),
-         (5.5, 10.7), (6, 11)],
-    ]
-
-    arm.draw_paths(face)
+    arm.pen_up()
     arm.home()
 
+    print("Portrait completed!")
 
 
 if __name__ == "__main__":
