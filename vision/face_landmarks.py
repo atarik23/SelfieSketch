@@ -4,6 +4,7 @@ import numpy as np
 import json
 
 from mediapipe.tasks.python.vision import FaceLandmarksConnections
+from robotics.kinematics import DrawingArm
 from vision.image_processing import (
     extract_edges,
     image_to_paths,
@@ -12,10 +13,11 @@ from vision.image_processing import (
     merge_paths,
     simplify_paths,
 )
-from planning.shapes import fit_paths_to_paper
-
-from robotics.kinematics import DrawingArm
-
+from planning.shapes import (
+    fit_paths_to_paper,
+    optimize_path_order,
+    pen_up_distance
+)
 
 MODEL_PATH = "vision/models/face_landmarker.task"
 IMAGE_PATH = "test_photo.jpeg"
@@ -152,6 +154,19 @@ if __name__ == "__main__":
         paper = (-2.0, 7.0, 12.5, 9.5)
 
         drawing_paths = fit_paths_to_paper(simplified_paths, paper)
+
+        before = pen_up_distance(drawing_paths)
+
+        drawing_paths = optimize_path_order(
+            drawing_paths,
+            start_position=(0.0, 0.0)
+        )
+
+        after = pen_up_distance(drawing_paths)
+
+        print(f"Pen-up distance before: {before:.2f} cm")
+        print(f"Pen-up distance after:  {after:.2f} cm")
+        print(f"Improvement: {(before - after) / before * 100:.1f}%")
 
         print(f"Drawing paths: {len(drawing_paths)}")
 

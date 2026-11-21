@@ -86,3 +86,65 @@ def fit_paths_to_paper(paths, paper, margin=0.5):
 
     return scaled_paths
 
+
+def optimize_path_order(paths, start_position=(0.0, 0.0)):
+    """Reorder paths to minimize pen-up travel using nearest neighbor."""
+    remaining = [list(path) for path in paths if len(path) >= 2]
+    optimized = []
+    current = start_position
+
+    while remaining:
+        best_index = None
+        best_distance = float("inf")
+        reverse = False
+
+        for i, path in enumerate(remaining):
+            start_distance = np.hypot(
+                path[0][0] - current[0],
+                path[0][1] - current[1]
+            )
+
+            end_distance = np.hypot(
+                path[-1][0] - current[0],
+                path[-1][1] - current[1]
+            )
+
+            if start_distance < best_distance:
+                best_distance = start_distance
+                best_index = i
+                reverse = False
+
+            if end_distance < best_distance:
+                best_distance = end_distance
+                best_index = i
+                reverse = True
+
+        selected = remaining.pop(best_index)
+
+        if reverse:
+            selected.reverse()
+
+        optimized.append(selected)
+        current = selected[-1]
+
+    return optimized
+
+
+
+def pen_up_distance(paths, start_position=(0.0, 0.0)):
+    """Calculate total travel distance between drawing paths."""
+    total = 0.0
+    current = start_position
+
+    for path in paths:
+        if not path:
+            continue
+
+        total += np.hypot(
+            path[0][0] - current[0],
+            path[0][1] - current[1]
+        )
+
+        current = path[-1]
+
+    return float(total)
